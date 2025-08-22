@@ -17,7 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from core.views import ThesisListView, ThesisDetailView, ApplicationListView, ApplicationDetailView, UserListView
+from core.views import ThesisListView, ThesisDetailView, ApplicationListView, ApplicationDetailView, UserListView, logout_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -27,5 +27,7 @@ urlpatterns = [
     path("api/applications/", ApplicationListView.as_view(), name="application-list"),
     path("api/applications/<int:pk>/", ApplicationDetailView.as_view(), name="application-detail"),
     path("api/users/", UserListView.as_view(), name="user-list"),
+    path("", include("core.urls")),
+
 ]
 
