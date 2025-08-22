@@ -55,16 +55,41 @@ class ApplicationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "student", "application_date"]
 
     def create(self, validated_data):
-        validated_data["student"] = self.context["request"].user
-        validated_data["status"] = "Pending"
+        user = self.context["request"].user
+        if user.role != "student":
+            raise serializers.ValidationError("Only students can create applications.")
+
+        validated_data["student"] = user
+        validated_data["status"] = Application.Status.PENDING  # use model enum
         return super().create(validated_data)
 
-    def update(self, instance, validated_data):
+    def validate(self, attrs):
+        """
+        Run role-based permission checks at validation time
+        so that serializer.is_valid() fails when inappropriate data is passed.
+        """
         user = self.context["request"].user
-        if user.role == "student":
-            if validated_data.get("status") != "Withdrawn":
-                validated_data.pop("status", None)
-        return super().update(instance, validated_data)
+        new_status = attrs.get("status")
+
+        # Handle UPDATE vs CREATE
+        if self.instance:  # updating
+            if user.role == "student":
+                if self.instance.student != user:
+                    raise serializers.ValidationError("You cannot modify another student's application.")
+                if new_status and new_status != Application.Status.WITHDRAWN:
+                    raise serializers.ValidationError("Students can only withdraw applications.")
+
+            elif user.role == "coordinator":
+                if new_status and new_status not in [
+                    Application.Status.ACCEPTED,
+                    Application.Status.REJECTED,
+                ]:
+                    raise serializers.ValidationError("Coordinators can only accept or reject applications.")
+
+            elif new_status:
+                raise serializers.ValidationError("You are not allowed to change application status.")
+
+        return attrs
 
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
