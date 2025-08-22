@@ -1,1 +1,2 @@
-the current version has the database structured as requested, and superusers can do CRUD operations on it, but the website is not yet set up for regular users to operate
+the current version has the database structured as requested, superusers can do CRUD operations on it, and regular user crud works (account registration, editing, login)
+currently working on permissions and applying them to views
