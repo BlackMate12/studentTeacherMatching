@@ -1,13 +1,15 @@
 from django.test import TestCase
 from django.utils import timezone
-from core.models import User, Thesis, Application, ResearchInterest, StudentInterest
+from core.models import User, Thesis, Application, ResearchInterest, StudentInterest, Notification
 from core.serializers import ApplicationSerializer, StudentInterestSerializer
+from rest_framework.test import APITestCase
+from django.urls import reverse
 
 class SerializerPermissionTests(TestCase):
     def setUp(self):
         # Create users
         self.student = User.objects.create_user(username="stud", password="pass", role="student")
-        self.supervisor = User.objects.create_user(username="sup", password="pass", role="coordinator")
+        self.supervisor = User.objects.create_user(username="sup", password="pass", role="supervisor")
 
         # Create a thesis
         self.thesis = Thesis.objects.create(
@@ -74,3 +76,25 @@ class SerializerPermissionTests(TestCase):
         dummy = Dummy()
         dummy.user = user
         return dummy
+
+class NotificationTests(APITestCase):
+    def setUp(self):
+        self.supervisor = User.objects.create_user(username="prof", password="pass", role="supervisor")
+        self.student = User.objects.create_user(username="stud", password="pass", role="student")
+        self.thesis = Thesis.objects.create(
+            title="Deep Learning",
+            description="Test",
+            department="CS",
+            supervisor=self.supervisor,
+            status="open"
+        )
+
+    def test_student_application_creates_notification(self):
+        self.client.login(username="stud", password="pass")
+        response = self.client.post(reverse("application-list"), {
+            "thesis": self.thesis.id,
+            "motivation_letter": "I love AI"
+        })
+        self.assertEqual(response.status_code, 201)
+        notif = Notification.objects.get(recipient=self.supervisor)
+        self.assertIn("stud applied", notif.message)

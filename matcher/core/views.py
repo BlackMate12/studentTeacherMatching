@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated
 from .permissions import (
     IsSelfOrReadOnly,
@@ -7,7 +7,7 @@ from .permissions import (
     StudentDataPermission,
     ThesisDataPermission,
 )
-from .models import User, Thesis, Application, StudentSkill, StudentInterest, ThesisSkill, ThesisInterest
+from .models import User, Thesis, Application, StudentSkill, StudentInterest, ThesisSkill, ThesisInterest, Notification
 from .serializers import (
     UserSerializer,
     ThesisSerializer,
@@ -16,6 +16,7 @@ from .serializers import (
     StudentInterestSerializer,
     ThesisSkillSerializer,
     ThesisInterestSerializer,
+    NotificationSerializer,
 )
 
 from django_filters.rest_framework import DjangoFilterBackend
@@ -31,11 +32,11 @@ from django.contrib.auth.models import Group
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 class IsCoordinatorOrReadOnly(BasePermission):
-    #Only coordinators can create/update/delete theses.
+    #Only supervisors can create/update/delete theses.
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:  # GET, HEAD, OPTIONS
             return True
-        return request.user.is_authenticated and request.user.role == "coordinator"
+        return request.user.is_authenticated and request.user.role == "supervisor"
 
 class ApplicationPermission(BasePermission):
     #Students can create applications.
@@ -52,7 +53,7 @@ class ApplicationPermission(BasePermission):
             return obj.student == request.user
 
         #Coordinators can manage applications for theses they supervise
-        if request.user.role == "coordinator":
+        if request.user.role == "supervisor":
             return obj.thesis.supervisor == request.user
 
         return False
@@ -69,7 +70,7 @@ class ThesisListView(generics.ListCreateAPIView):
         qs = super().get_queryset()
         if self.request.user.role == "student":
             return qs.filter(status="Open")
-        if self.request.user.role == "coordinator":
+        if self.request.user.role == "supervisor":
             return qs.filter(supervisor=self.request.user)
         return qs
 
@@ -126,7 +127,7 @@ def register(request):
 
             if role == "student":
                 group = Group.objects.get(name="Students")
-            elif role == "coordinator":
+            elif role == "supervisor":
                 group = Group.objects.get(name="Coordinators")
             user.groups.add(group)
 
@@ -150,3 +151,10 @@ def profile(request):
 def logout_view(request):
     logout(request)
     return redirect("login")
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")

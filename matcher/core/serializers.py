@@ -9,6 +9,7 @@ from .models import (
     StudentInterest,
     ThesisSkill,
     ThesisInterest,
+    Notification,
 )
 
 class UserSerializer(serializers.ModelSerializer):
@@ -56,12 +57,16 @@ class ApplicationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = self.context["request"].user
-        if user.role != "student":
-            raise serializers.ValidationError("Only students can create applications.")
-
         validated_data["student"] = user
-        validated_data["status"] = Application.Status.PENDING  # use model enum
-        return super().create(validated_data)
+        validated_data["status"] = "pending"
+        application = super().create(validated_data)
+
+        Notification.objects.create(
+            recipient=application.thesis.supervisor,
+            message=f"{user.username} applied to your thesis '{application.thesis.title}'."
+        )
+
+        return application
 
     def validate(self, attrs):
         """
@@ -79,7 +84,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
                 if new_status and new_status != Application.Status.WITHDRAWN:
                     raise serializers.ValidationError("Students can only withdraw applications.")
 
-            elif user.role == "coordinator":
+            elif user.role == "supervisor":
                 if new_status and new_status not in [
                     Application.Status.ACCEPTED,
                     Application.Status.REJECTED,
@@ -90,6 +95,34 @@ class ApplicationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You are not allowed to change application status.")
 
         return attrs
+
+    def update(self, instance, validated_data):
+        user = self.context["request"].user
+        new_status = validated_data.get("status")
+
+        # Student can only withdraw
+        if user.role == "student":
+            if new_status != Application.Status.WITHDRAWN:
+                raise serializers.ValidationError("Students can only withdraw applications.")
+
+        # Coordinator can accept/reject only for their theses
+        elif user.role == "supervisor":
+            if instance.thesis.supervisor != user:
+                raise serializers.ValidationError("You cannot modify applications for theses you don't own.")
+            if new_status not in [Application.Status.ACCEPTED, Application.Status.REJECTED]:
+                raise serializers.ValidationError("Coordinators can only accept or reject applications.")
+
+        updated_instance = super().update(instance, validated_data)
+
+        # Create notification for the student
+        if user.role == "supervisor" and new_status in [Application.Status.ACCEPTED, Application.Status.REJECTED]:
+            Notification.objects.create(
+                recipient=instance.student,
+                message=f"Your application for '{instance.thesis.title}' was {new_status.lower()}."
+            )
+
+        return updated_instance
+
 
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
@@ -104,9 +137,14 @@ class ResearchInterestSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 class StudentSkillSerializer(serializers.ModelSerializer):
+    skill = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=Skill.objects.all()
+    )
+
     class Meta:
         model = StudentSkill
-        fields = ["id", "student", "skill", "proficiency_level"]
+        fields = ["id", "student", "skill"]
         read_only_fields = ["id", "student"]
 
     def create(self, validated_data):
@@ -114,6 +152,11 @@ class StudentSkillSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class StudentInterestSerializer(serializers.ModelSerializer):
+    interest = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=ResearchInterest.objects.all()
+    )
+
     class Meta:
         model = StudentInterest
         fields = ["id", "student", "interest", "priority"]
@@ -148,3 +191,9 @@ class ThesisInterestSerializer(serializers.ModelSerializer):
         if thesis.supervisor != user and not user.is_staff:
             raise serializers.ValidationError("You can only add interests to your own theses.")
         return super().create(validated_data)
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ["id", "recipient", "message", "created_at", "read"]
+        read_only_fields = ["id", "recipient", "created_at"]

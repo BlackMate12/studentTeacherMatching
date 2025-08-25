@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -113,3 +114,16 @@ class ThesisInterest(models.Model):
 
     class Meta:
         unique_together = ('thesis', 'interest')
+
+class Notification(models.Model):
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications"
+    )
+    message = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+    read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notif to {self.recipient.username}: {self.message[:40]}"
