@@ -126,13 +126,13 @@ def register(request):
             role = user.role
 
             if role == "student":
-                group = Group.objects.get(name="Students")
+                group, _ = Group.objects.get_or_create(name="Students")
             elif role == "supervisor":
-                group = Group.objects.get(name="Coordinators")
+                group, _ = Group.objects.get_or_create(name="Coordinators")
             user.groups.add(group)
 
             login(request, user)
-            return redirect("profile")
+            return redirect("dashboard")
     else:
         form = UserRegisterForm()
     return render(request, "register.html", {"form": form})
@@ -148,6 +148,11 @@ def profile(request):
         form = UserUpdateForm(instance=request.user)
     return render(request, "profile.html", {"form": form})
 
+@login_required
+def dashboard(request):
+    role = request.user.role
+    return render(request, "dashboard.html", {"role": role})
+
 def logout_view(request):
     logout(request)
     return redirect("login")
@@ -158,3 +163,96 @@ class NotificationListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
+
+# --- STUDENT VIEWS ---
+
+# Students: list only *open* theses
+class StudentThesisListView(generics.ListAPIView):
+    serializer_class = ThesisSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Thesis.objects.filter(status=Thesis.Status.OPEN)
+
+
+# Students: see their own applications
+class MyApplicationsView(generics.ListAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Application.objects.filter(student=self.request.user)
+
+
+# Students: create an application for a thesis
+class ApplyToThesisView(generics.CreateAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(student=self.request.user)
+
+
+# Students: see their notifications
+class MyNotificationsView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
+
+
+# --- SUPERVISOR VIEWS ---
+
+# Supervisors: manage their own theses
+class MyThesisListCreateView(generics.ListCreateAPIView):
+    serializer_class = ThesisSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Thesis.objects.filter(supervisor=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(supervisor=self.request.user)
+
+
+# Supervisors: see all applications for *their* theses
+class MyThesisApplicationsView(generics.ListAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Application.objects.filter(thesis__supervisor=self.request.user)
+
+
+# Supervisors: update (accept/reject) applications
+class UpdateApplicationStatusView(generics.RetrieveUpdateAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Supervisors can only modify applications for their theses
+        return Application.objects.filter(thesis__supervisor=self.request.user)
+
+    def perform_update(self, serializer):
+        application = serializer.save()
+        # Create notification for student
+        Notification.objects.create(
+            recipient=application.student,
+            message=f"Your application for '{application.thesis.title}' was {application.status}."
+        )
+
+class MySkillsView(generics.ListCreateAPIView):
+    serializer_class = StudentSkillSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return StudentSkill.objects.filter(student=self.request.user)
+
+
+class MyInterestsView(generics.ListCreateAPIView):
+    serializer_class = StudentInterestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return StudentInterest.objects.filter(student=self.request.user)

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .btn {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px 25px;
+            font-size: 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome, {{ request.user.username }}!</h1>
+
+    {% if role == "student" %}
+        <a href="{% url 'my-skills' %}" class="btn">My Skills</a>
+        <a href="{% url 'my-interests' %}" class="btn">My Interests</a>
+        <a href="{% url 'student-thesis-list' %}" class="btn">Available Theses</a>
+        <a href="{% url 'my-applications' %}" class="btn">My Applications</a>
+        <a href="{% url 'my-notifications' %}" class="btn">Notifications</a>
+    {% elif role == "supervisor" %}
+        <a href="{% url 'my-theses' %}" class="btn">My Theses</a>
+        <a href="{% url 'my-thesis-applications' %}" class="btn">Applications</a>
+    {% endif %}
+
+    <br><br>
+    <a href="{% url 'profile' %}" class="btn">Edit Profile</a>
+</body>
+</html>
