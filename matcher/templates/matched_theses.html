@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Matched Theses{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Matched Theses</h2>
+
+<div class="list-group">
+  {% for thesis in theses %}
+    <div class="list-group-item">
+      <h5>{{ thesis.title }}</h5>
+      <p class="mb-1">{{ thesis.description }}</p>
+      <small class="text-muted">Supervisor: {{ thesis.supervisor.username }}</small>
+
+      {% if user.role == "student" %}
+        <form method="post" action="{% url 'apply-to-thesis' thesis.id %}" class="mt-3">
+          {% csrf_token %}
+          <div class="mb-2">
+            <textarea name="motivation" rows="3" class="form-control" placeholder="Enter your motivation letter" required></textarea>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        </form>
+      {% endif %}
+    </div>
+  {% empty %}
+    <p>No theses matched your skills/interests.</p>
+  {% endfor %}
+</div>
+{% endblock %}

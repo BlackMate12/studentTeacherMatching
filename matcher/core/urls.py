@@ -28,6 +28,8 @@ urlpatterns = [
     path("student/interests/", views.my_interests, name="my-interests"),
     path("student/interests/<int:pk>/delete/", views.delete_interest, name="delete-interest"),
     path("student/theses/<int:pk>/apply/", views.apply_to_thesis, name="apply-to-thesis"),
+    path("student/matched-theses/", views.matched_theses, name="matched-theses"),
+
 
     # supervisor actions
     path("supervisor/theses/", views.my_theses, name="my-theses"),

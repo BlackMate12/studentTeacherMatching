@@ -16,10 +16,12 @@ class UserUpdateForm(forms.ModelForm):
 class ThesisForm(forms.ModelForm):
     class Meta:
         model = Thesis
-        fields = ["title", "description", "department", "keywords", "max_students", "status"]
+        fields = ["title", "description", "department", "interests", "required_skills", "max_students", "status"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "status": forms.Select(),
+            "required_skills": forms.CheckboxSelectMultiple(),
+            "interests": forms.CheckboxSelectMultiple(),
         }
 
 class ApplicationForm(forms.ModelForm):

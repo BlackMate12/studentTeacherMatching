@@ -34,6 +34,8 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 from django.contrib import messages
 from django.urls import reverse
 
+from django.db.models import Count, Q, OuterRef, Subquery
+
 class IsCoordinatorOrReadOnly(BasePermission):
     #Only supervisors can create/update/delete theses.
     def has_permission(self, request, view):
@@ -269,14 +271,27 @@ def dashboard(request):
 # THESIS LIST (human-readable)
 @login_required
 def theses_list(request):
-    # students see open theses; supervisors see their own (or all if staff)
     if request.user.role == "student":
-        theses = Thesis.objects.filter(status=Thesis.Status.OPEN)
+        # Annotate supervisors with total accepted applications
+        supervisors_with_counts = (
+            Application.objects
+            .filter(thesis__supervisor=OuterRef("supervisor"), status=Application.Status.ACCEPTED)
+            .values("thesis__supervisor")
+            .annotate(total=Count("id"))
+            .values("total")
+        )
+
+        theses = (
+            Thesis.objects.filter(status=Thesis.Status.OPEN)
+            .annotate(supervisor_accepted_count=Subquery(supervisors_with_counts[:1]))
+            .filter(Q(supervisor_accepted_count__lt=7) | Q(supervisor_accepted_count__isnull=True))
+        )
+
     elif request.user.role == "supervisor":
-        theses = Thesis.objects.filter(supervisor=request.user)
-    else:
         theses = Thesis.objects.all()
+
     return render(request, "theses.html", {"theses": theses})
+
 
 # THESIS DETAIL + APPLY (student can apply from here)
 @login_required
@@ -311,6 +326,8 @@ def thesis_detail(request, pk):
 # STUDENT: My Applications
 @login_required
 def my_applications(request):
+    if request.user.role != "student":
+        return redirect("dashboard")
     apps = Application.objects.filter(student=request.user).order_by("-application_date")
     return render(request, "my_applications.html", {"applications": apps})
 
@@ -327,24 +344,43 @@ def supervisor_applications(request):
 @login_required
 def update_application_status(request, pk):
     app = get_object_or_404(Application, pk=pk, thesis__supervisor=request.user)
+
     if request.method == "POST":
         action = request.POST.get("action")
+
         if action == "accept":
-            # check capacity
-            if not app.thesis.has_capacity:
+            # count accepted applications for this supervisor across ALL their theses
+            accepted_count = Application.objects.filter(
+                thesis__supervisor=request.user,
+                status=Application.Status.ACCEPTED,
+            ).count()
+
+            if accepted_count >= 7:
+                messages.error(request, "You cannot accept more than 7 students across all your theses.")
+            elif not app.thesis.has_capacity:
                 messages.error(request, "Thesis has no capacity.")
             else:
                 app.status = Application.Status.ACCEPTED
                 app.save()
-                Notification.objects.create(recipient=app.student, message=f"Your application for '{app.thesis.title}' was accepted.")
+                Notification.objects.create(
+                    recipient=app.student,
+                    message=f"Your application for '{app.thesis.title}' was accepted."
+                )
                 messages.success(request, "Application accepted.")
+
         elif action == "reject":
             app.status = Application.Status.REJECTED
             app.save()
-            Notification.objects.create(recipient=app.student, message=f"Your application for '{app.thesis.title}' was rejected.")
+            Notification.objects.create(
+                recipient=app.student,
+                message=f"Your application for '{app.thesis.title}' was rejected."
+            )
             messages.success(request, "Application rejected.")
+
         return redirect("supervisor-applications")
+
     return render(request, "supervisor_applications.html", {"application": app})
+
 
 # SUPERVISOR: My Theses (list + create)
 @login_required
@@ -451,16 +487,20 @@ def apply_to_thesis(request, pk):
         messages.error(request, "Only students can apply to theses.")
         return redirect("theses")
 
+    if Application.objects.filter(student=request.user, status="pending").exists():
+        messages.warning(request, "You already have a pending application. Withdraw it before applying again.")
+        return redirect("theses")
+
     if request.method == "POST":
         # prevent duplicate application
         if Application.objects.filter(student=request.user, thesis=thesis).exists():
             messages.warning(request, "You already applied for this thesis.")
         else:
-            motivation = request.POST.get("motivation", "").strip()
+            motivation_letter = request.POST.get("motivation", "").strip()
             Application.objects.create(
                 student=request.user,
                 thesis=thesis,
-                motivation=motivation,
+                motivation_letter=motivation_letter,
                 status="pending"
             )
             messages.success(request, "Application submitted successfully.")
@@ -498,3 +538,34 @@ def withdraw_application(request, pk):
         app.save()
         messages.info(request, "Application withdrawn.")
     return redirect("my-applications")
+
+@login_required
+def matched_theses(request):
+    if request.user.role != "student":
+        messages.error(request, "Only students can view matched theses.")
+        return redirect("dashboard")
+
+    # Collect the student's skills and interests (just the IDs)
+    student_skill_ids = StudentSkill.objects.filter(student=request.user).values_list("skill_id", flat=True)
+    student_interest_ids = StudentInterest.objects.filter(student=request.user).values_list("interest_id", flat=True)
+
+    # Match theses by overlapping required_skills or interests
+    theses = (
+        Thesis.objects.filter(status=Thesis.Status.OPEN)
+        .annotate(
+            shared_skills=Count(
+                "required_skills",
+                filter=Q(required_skills__in=student_skill_ids),
+                distinct=True,
+            ),
+            shared_interests=Count(
+                "interests",
+                filter=Q(interests__in=student_interest_ids),
+                distinct=True,
+            ),
+        )
+        .filter(Q(shared_skills__gte=2) | Q(shared_interests__gte=2))
+    )
+
+    return render(request, "matched_theses.html", {"theses": theses})
+
