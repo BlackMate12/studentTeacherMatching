@@ -10,7 +10,7 @@ urlpatterns = [
     path("profile/", views.profile, name="profile"),
     path("profile/edit/", views.edit_profile, name="edit-profile"),
 
-    # dashboard + web UI
+    # dashboard
     path("dashboard/", views.dashboard, name="dashboard"),
 
     # theses

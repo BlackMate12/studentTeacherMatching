@@ -76,8 +76,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         new_status = attrs.get("status")
 
-        # Handle UPDATE vs CREATE
-        if self.instance:  # updating
+        if self.instance:
             if user.role == "student":
                 if self.instance.student != user:
                     raise serializers.ValidationError("You cannot modify another student's application.")

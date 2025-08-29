@@ -36,10 +36,11 @@ from django.urls import reverse
 
 from django.db.models import Count, Q, OuterRef, Subquery
 
+#too much to keep track..........
 class IsCoordinatorOrReadOnly(BasePermission):
     #Only supervisors can create/update/delete theses.
     def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:  # GET, HEAD, OPTIONS
+        if request.method in SAFE_METHODS:
             return True
         return request.user.is_authenticated and request.user.role == "supervisor"
 
@@ -169,8 +170,6 @@ class NotificationListView(generics.ListAPIView):
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
 
-# --- STUDENT VIEWS ---
-
 # Students: list only *open* theses
 class StudentThesisListView(generics.ListAPIView):
     serializer_class = ThesisSerializer
@@ -178,7 +177,6 @@ class StudentThesisListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Thesis.objects.filter(status=Thesis.Status.OPEN)
-
 
 # Students: see their own applications
 class MyApplicationsView(generics.ListAPIView):
@@ -188,7 +186,6 @@ class MyApplicationsView(generics.ListAPIView):
     def get_queryset(self):
         return Application.objects.filter(student=self.request.user)
 
-
 # Students: create an application for a thesis
 class ApplyToThesisView(generics.CreateAPIView):
     serializer_class = ApplicationSerializer
@@ -197,7 +194,6 @@ class ApplyToThesisView(generics.CreateAPIView):
     def perform_create(self, serializer):
         serializer.save(student=self.request.user)
 
-
 # Students: see their notifications
 class MyNotificationsView(generics.ListAPIView):
     serializer_class = NotificationSerializer
@@ -205,9 +201,6 @@ class MyNotificationsView(generics.ListAPIView):
 
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
-
-
-# --- SUPERVISOR VIEWS ---
 
 # Supervisors: manage their own theses
 class MyThesisListCreateView(generics.ListCreateAPIView):
@@ -221,7 +214,7 @@ class MyThesisListCreateView(generics.ListCreateAPIView):
         serializer.save(supervisor=self.request.user)
 
 
-# Supervisors: see all applications for *their* theses
+# Supervisors: see all applications for THEIR theses
 class MyThesisApplicationsView(generics.ListAPIView):
     serializer_class = ApplicationSerializer
     permission_classes = [IsAuthenticated]
