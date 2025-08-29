@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>My Theses</h1>
+<a class="btn btn-primary mb-3" href="{% url 'create-thesis' %}">Create new</a>
+<div class="list-group">
+  {% for t in theses %}
+    <a class="list-group-item list-group-item-action" href="{% url 'thesis-detail' t.pk %}">
+      <div class="d-flex w-100 justify-content-between">
+        <h5 class="mb-1">{{ t.title }}</h5>
+        <small>{{ t.get_status_display }}</small>
+      </div>
+      <p class="mb-1">{{ t.description|truncatechars:140 }}</p>
+      <small><a href="{% url 'edit-thesis' t.pk %}">Edit</a></small>
+    </a>
+  {% endfor %}
+</div>
+{% endblock %}

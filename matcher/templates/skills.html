@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>My Skills</h1>
+<form method="post" class="mb-3">
+  {% csrf_token %}
+  <div class="row g-2">
+    <div class="col-auto">{{ form.skill }}</div>
+    <div class="col-auto"><button class="btn btn-primary">Add</button></div>
+  </div>
+</form>
+
+<ul class="list-group">
+  {% for s in skills %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ s.skill.name }}
+      <a class="btn btn-sm btn-outline-danger" href="{% url 'delete-skill' s.pk %}">Remove</a>
+    </li>
+  {% empty %}
+    <li class="list-group-item">No skills added</li>
+  {% endfor %}
+</ul>
+{% endblock %}

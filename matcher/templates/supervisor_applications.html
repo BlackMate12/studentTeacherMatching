@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Applications for my Theses</h1>
+<table class="table">
+  <thead><tr><th>Thesis</th><th>Student</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for a in applications %}
+    <tr>
+      <td><a href="{% url 'thesis-detail' a.thesis.pk %}">{{ a.thesis.title }}</a></td>
+      <td>{{ a.student.username }}</td>
+      <td>{{ a.application_date }}</td>
+      <td>{{ a.get_status_display }}</td>
+      <td>
+        {% if a.status == "pending" %}
+        <form method="post" action="{% url 'update-application-status' a.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button name="action" value="accept" class="btn btn-sm btn-success">Accept</button>
+          <button name="action" value="reject" class="btn btn-sm btn-danger">Reject</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No applications</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}My Interests{% endblock %}
+
+{% block content %}
+<h2>My Research Interests</h2>
+<ul class="list-group mb-4">
+  {% for interest in interests %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        {{ interest.interest.name }}
+        <span class="badge bg-info">Priority {{ interest.priority }}</span>
+      </div>
+      <a href="{% url 'delete-interest' interest.id %}" 
+         class="btn btn-sm btn-danger">Delete</a>
+    </li>
+  {% empty %}
+    <li class="list-group-item">No interests added yet.</li>
+  {% endfor %}
+</ul>
+
+<h4>Add Interest</h4>
+<form method="post" class="card card-body shadow-sm">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit" class="btn btn-primary">Add</button>
+</form>
+{% endblock %}

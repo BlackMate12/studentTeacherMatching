@@ -1,44 +1,63 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
-            text-align: center;
-            margin-top: 50px;
-        }
-        .btn {
-            display: inline-block;
-            margin: 10px;
-            padding: 15px 25px;
-            font-size: 16px;
-            background: #007bff;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-        }
-        .btn:hover {
-            background: #0056b3;
-        }
-    </style>
-</head>
-<body>
-    <h1>Welcome, {{ request.user.username }}!</h1>
+{% extends "base.html" %}
 
-    {% if role == "student" %}
-        <a href="{% url 'my-skills' %}" class="btn">My Skills</a>
-        <a href="{% url 'my-interests' %}" class="btn">My Interests</a>
-        <a href="{% url 'student-thesis-list' %}" class="btn">Available Theses</a>
-        <a href="{% url 'my-applications' %}" class="btn">My Applications</a>
-        <a href="{% url 'my-notifications' %}" class="btn">Notifications</a>
-    {% elif role == "supervisor" %}
-        <a href="{% url 'my-theses' %}" class="btn">My Theses</a>
-        <a href="{% url 'my-thesis-applications' %}" class="btn">Applications</a>
-    {% endif %}
+{% block title %}Dashboard{% endblock %}
 
-    <br><br>
-    <a href="{% url 'profile' %}" class="btn">Edit Profile</a>
-</body>
-</html>
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Profile</h5>
+        <a href="{% url 'profile' %}" class="btn btn-primary">View Profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Skills</h5>
+        <a href="{% url 'my-skills' %}" class="btn btn-secondary">Manage Skills</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Research Interests</h5>
+        <a href="{% url 'my-interests' %}" class="btn btn-secondary">Manage Interests</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Theses</h5>
+        <a href="{% url 'theses' %}" class="btn btn-info">View Theses</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Applications</h5>
+        <a href="{% url 'my-applications' %}" class="btn btn-warning">View Applications</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Notifications</h5>
+        <a href="{% url 'web-notifications' %}" class="btn btn-dark">View Notifications</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

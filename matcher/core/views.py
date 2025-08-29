@@ -23,13 +23,16 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import User, Thesis, Application
 from .serializers import UserSerializer, ThesisSerializer, ApplicationSerializer
 
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from .forms import UserRegisterForm, UserUpdateForm
+from .forms import UserRegisterForm, UserUpdateForm, StudentInterestForm, StudentSkillForm, ThesisForm, ApplicationForm
 
 from django.contrib.auth.models import Group
 from rest_framework.permissions import BasePermission, SAFE_METHODS
+
+from django.contrib import messages
+from django.urls import reverse
 
 class IsCoordinatorOrReadOnly(BasePermission):
     #Only supervisors can create/update/delete theses.
@@ -256,3 +259,242 @@ class MyInterestsView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return StudentInterest.objects.filter(student=self.request.user)
+
+# STUDENT & SUPERVISOR DASHBOARD
+@login_required
+def dashboard(request):
+    role = request.user.role
+    return render(request, "dashboard.html", {"role": role})
+
+# THESIS LIST (human-readable)
+@login_required
+def theses_list(request):
+    # students see open theses; supervisors see their own (or all if staff)
+    if request.user.role == "student":
+        theses = Thesis.objects.filter(status=Thesis.Status.OPEN)
+    elif request.user.role == "supervisor":
+        theses = Thesis.objects.filter(supervisor=request.user)
+    else:
+        theses = Thesis.objects.all()
+    return render(request, "theses.html", {"theses": theses})
+
+# THESIS DETAIL + APPLY (student can apply from here)
+@login_required
+def thesis_detail(request, pk):
+    thesis = get_object_or_404(Thesis, pk=pk)
+    can_apply = request.user.role == "student" and thesis.status == Thesis.Status.OPEN
+    # check if student already applied
+    already_applied = Application.objects.filter(student=request.user, thesis=thesis).exists() if request.user.role == "student" else False
+
+    if request.method == "POST" and can_apply and not already_applied:
+        form = ApplicationForm(request.POST)
+        if form.is_valid():
+            app = form.save(commit=False)
+            app.student = request.user
+            app.thesis = thesis
+            app.status = Application.Status.PENDING
+            app.save()
+            # notify supervisor
+            Notification.objects.create(recipient=thesis.supervisor, message=f"{request.user.username} applied to your thesis '{thesis.title}'.")
+            messages.success(request, "Application submitted.")
+            return redirect("thesis-detail", pk=thesis.pk)
+    else:
+        form = ApplicationForm()
+
+    return render(request, "thesis_detail.html", {
+        "thesis": thesis,
+        "form": form,
+        "can_apply": can_apply,
+        "already_applied": already_applied,
+    })
+
+# STUDENT: My Applications
+@login_required
+def my_applications(request):
+    apps = Application.objects.filter(student=request.user).order_by("-application_date")
+    return render(request, "my_applications.html", {"applications": apps})
+
+# SUPERVISOR: Applications to my theses
+@login_required
+def supervisor_applications(request):
+    if request.user.role != "supervisor":
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+    apps = Application.objects.filter(thesis__supervisor=request.user).order_by("-application_date")
+    return render(request, "supervisor_applications.html", {"applications": apps})
+
+# SUPERVISOR: accept/reject via POST
+@login_required
+def update_application_status(request, pk):
+    app = get_object_or_404(Application, pk=pk, thesis__supervisor=request.user)
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "accept":
+            # check capacity
+            if not app.thesis.has_capacity:
+                messages.error(request, "Thesis has no capacity.")
+            else:
+                app.status = Application.Status.ACCEPTED
+                app.save()
+                Notification.objects.create(recipient=app.student, message=f"Your application for '{app.thesis.title}' was accepted.")
+                messages.success(request, "Application accepted.")
+        elif action == "reject":
+            app.status = Application.Status.REJECTED
+            app.save()
+            Notification.objects.create(recipient=app.student, message=f"Your application for '{app.thesis.title}' was rejected.")
+            messages.success(request, "Application rejected.")
+        return redirect("supervisor-applications")
+    return render(request, "supervisor_applications.html", {"application": app})
+
+# SUPERVISOR: My Theses (list + create)
+@login_required
+def my_theses(request):
+    if request.user.role != "supervisor":
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+    theses = Thesis.objects.filter(supervisor=request.user)
+    return render(request, "my_theses.html", {"theses": theses})
+
+@login_required
+def create_thesis(request):
+    if request.user.role != "supervisor":
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+    if request.method == "POST":
+        form = ThesisForm(request.POST)
+        if form.is_valid():
+            thesis = form.save(commit=False)
+            thesis.supervisor = request.user
+            thesis.save()
+            form.save_m2m()
+            messages.success(request, "Thesis created.")
+            return redirect("my-theses")
+    else:
+        form = ThesisForm()
+    return render(request, "create_thesis.html", {"form": form})
+
+@login_required
+def edit_thesis(request, pk):
+    thesis = get_object_or_404(Thesis, pk=pk, supervisor=request.user)
+    if request.method == "POST":
+        form = ThesisForm(request.POST, instance=thesis)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Thesis updated.")
+            return redirect("my-theses")
+    else:
+        form = ThesisForm(instance=thesis)
+    return render(request, "edit_thesis.html", {"form": form, "thesis": thesis})
+
+# STUDENT: My skills & interests (list/add/delete)
+@login_required
+def my_skills(request):
+    if request.method == "POST":
+        form = StudentSkillForm(request.POST)
+        if form.is_valid():
+            skill_obj = form.save(commit=False)
+            skill_obj.student = request.user
+            try:
+                skill_obj.save()
+                messages.success(request, "Skill added.")
+            except Exception:
+                messages.error(request, "Skill already added.")
+            return redirect("my-skills")
+    else:
+        form = StudentSkillForm()
+    skills = StudentSkill.objects.filter(student=request.user)
+    return render(request, "skills.html", {"skills": skills, "form": form})
+
+@login_required
+def delete_skill(request, pk):
+    sk = get_object_or_404(StudentSkill, pk=pk, student=request.user)
+    sk.delete()
+    messages.success(request, "Skill removed.")
+    return redirect("my-skills")
+
+@login_required
+def my_interests(request):
+    if request.method == "POST":
+        form = StudentInterestForm(request.POST)
+        if form.is_valid():
+            int_obj = form.save(commit=False)
+            int_obj.student = request.user
+            try:
+                int_obj.save()
+                messages.success(request, "Interest added.")
+            except Exception:
+                messages.error(request, "Interest already added.")
+            return redirect("my-interests")
+    else:
+        form = StudentInterestForm()
+    interests = StudentInterest.objects.filter(student=request.user)
+    return render(request, "interests.html", {"interests": interests, "form": form})
+
+@login_required
+def delete_interest(request, pk):
+    it = get_object_or_404(StudentInterest, pk=pk, student=request.user)
+    it.delete()
+    messages.success(request, "Interest removed.")
+    return redirect("my-interests")
+
+# Notifications (for both roles)
+@login_required
+def web_notifications(request):
+    notes = Notification.objects.filter(recipient=request.user).order_by("-created_at")
+    return render(request, "notifications.html", {"notifications": notes})
+
+@login_required
+def apply_to_thesis(request, pk):
+    thesis = get_object_or_404(Thesis, pk=pk)
+
+    if request.user.role != "student":
+        messages.error(request, "Only students can apply to theses.")
+        return redirect("theses")
+
+    if request.method == "POST":
+        # prevent duplicate application
+        if Application.objects.filter(student=request.user, thesis=thesis).exists():
+            messages.warning(request, "You already applied for this thesis.")
+        else:
+            motivation = request.POST.get("motivation", "").strip()
+            Application.objects.create(
+                student=request.user,
+                thesis=thesis,
+                motivation=motivation,
+                status="pending"
+            )
+            messages.success(request, "Application submitted successfully.")
+
+    return redirect("theses")
+
+
+@login_required
+def delete_notification(request, pk):
+    notif = get_object_or_404(Notification, pk=pk, recipient=request.user)
+    notif.delete()
+    messages.success(request, "Notification deleted.")
+    return redirect("web-notifications")
+
+from django.contrib.auth.forms import UserChangeForm
+
+@login_required
+def edit_profile(request):
+    if request.method == "POST":
+        form = UserChangeForm(request.POST, instance=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Profile updated successfully.")
+            return redirect("profile")
+    else:
+        form = UserChangeForm(instance=request.user)
+    return render(request, "profile_edit.html", {"form": form})
+
+
+@login_required
+def withdraw_application(request, pk):
+    app = get_object_or_404(Application, pk=pk, student=request.user, status="pending")
+    if request.method == "POST":
+        app.status = "withdrawn"
+        app.save()
+        messages.info(request, "Application withdrawn.")
+    return redirect("my-applications")

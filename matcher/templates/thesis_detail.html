@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ thesis.title }}{% endblock %}
+{% block content %}
+<h1>{{ thesis.title }}</h1>
+<p>{{ thesis.description }}</p>
+<p><strong>Supervisor:</strong> {{ thesis.supervisor.username }}</p>
+<p><strong>Status:</strong> {{ thesis.get_status_display }}</p>
+
+{% if user.role == "student" %}
+  {% if already_applied %}
+    <div class="alert alert-info">You already applied to this thesis.</div>
+  {% elif can_apply %}
+    <h5>Apply</h5>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button class="btn btn-success">Apply</button>
+    </form>
+  {% else %}
+    <div class="alert alert-warning">You cannot apply to this thesis.</div>
+  {% endif %}
+{% endif %}
+{% endblock %}

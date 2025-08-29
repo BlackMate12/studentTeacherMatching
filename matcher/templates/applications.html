@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Applications{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Applications</h2>
+
+<div class="list-group">
+  {% for app in applications %}
+    <div class="list-group-item">
+      <p><strong>Thesis:</strong> {{ app.thesis.title }}</p>
+      <p><strong>Student:</strong> {{ app.student.username }}</p>
+      <p><strong>Status:</strong> 
+        <span class="badge bg-{% if app.status == 'pending' %}secondary{% elif app.status == 'accepted' %}success{% elif app.status == 'rejected' %}danger{% else %}warning{% endif %}">
+          {{ app.status }}
+        </span>
+      </p>
+
+      {% if user.groups.first.name == "supervisor" %}
+        <form method="post" action="{% url 'update-application-status' app.id %}">
+          {% csrf_token %}
+          <select name="status" class="form-select form-select-sm mb-2">
+            <option value="pending">Pending</option>
+            <option value="accepted">Accept</option>
+            <option value="rejected">Reject</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary">Update</button>
+        </form>
+      {% endif %}
+    </div>
+  {% empty %}
+    <p>No applications found.</p>
+  {% endfor %}
+</div>
+{% endblock %}
